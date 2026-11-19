@@ -16,6 +16,7 @@ import { Stage } from './components/Stage';
 import { InspectorPanel } from './components/InspectorPanel';
 import { Timeline } from './components/Timeline';
 import { ExportModal } from './components/ExportModal';
+import { VibeGallery } from './components/VibeGallery';
 
 const STORAGE_KEY = 'animator_studio_project_v1';
 
@@ -43,6 +44,7 @@ export const App: React.FC = () => {
   const [isPlaying, setIsPlaying] = useState(true);
   const [autoKeyframe, setAutoKeyframe] = useState(true);
   const [exportOpen, setExportOpen] = useState(false);
+  const [mode, setMode] = useState<'vibes' | 'studio'>('vibes');
 
   const rafRef = useRef<number | null>(null);
 
@@ -330,158 +332,188 @@ export const App: React.FC = () => {
   const selectedLayer = project.layers.find((l) => l.id === selectedLayerId);
 
   return (
-    <div className="studio-shell">
-      <TopBar
-        project={project}
-        canUndo={history.length > 0}
-        canRedo={future.length > 0}
-        onRename={(name) => commitProject((p) => ({ ...p, name }))}
-        onSelectPreset={handleSelectPreset}
-        onUndo={handleUndo}
-        onRedo={handleRedo}
-        onImportProject={(imported) => {
-          commitProject(() => imported);
-          setSelectedLayerId(imported.layers[0]?.id ?? null);
-          setCurrentTime(0);
-        }}
-        onOpenExport={() => setExportOpen(true)}
-      />
-
-      <div className="workspace-grid">
-        <LayerPanel
-          layers={project.layers}
-          selectedLayerId={selectedLayerId}
-          onSelectLayer={setSelectedLayerId}
-          onAddLayer={handleAddLayer}
-          onToggleVisible={(id) =>
-            commitProject((p) => ({
-              ...p,
-              layers: p.layers.map((l) =>
-                l.id === id ? { ...l, visible: !l.visible } : l
-              ),
-            }))
-          }
-          onToggleLock={(id) =>
-            commitProject((p) => ({
-              ...p,
-              layers: p.layers.map((l) =>
-                l.id === id ? { ...l, locked: !l.locked } : l
-              ),
-            }))
-          }
-          onDuplicateLayer={(id) => {
-            const orig = project.layers.find((l) => l.id === id);
-            if (!orig) return;
-            const copy: Layer = {
-              ...structuredClone(orig),
-              id: uid('layer'),
-              name: `${orig.name} Copy`,
-            };
-            copy.base.x += 24;
-            copy.base.y += 24;
-            commitProject((p) => ({ ...p, layers: [...p.layers, copy] }));
-            setSelectedLayerId(copy.id);
-          }}
-          onDeleteLayer={(id) => {
-            commitProject((p) => ({
-              ...p,
-              layers: p.layers.filter((l) => l.id !== id),
-            }));
-            if (selectedLayerId === id) setSelectedLayerId(null);
-          }}
-        />
-
-        <Stage
-          project={project}
-          currentTime={currentTime}
-          selectedLayerId={selectedLayerId}
-          onSelectLayer={setSelectedLayerId}
-          onMoveLayer={handleMoveLayer}
-          onAddCelStroke={handleAddCelStroke}
-          onClearCelFrame={handleClearCelFrame}
-        />
-
-        <InspectorPanel
-          project={project}
-          selectedLayer={selectedLayer}
-          currentTime={currentTime}
-          onUpdateProject={(patch) =>
-            commitProject((p) => ({ ...p, ...patch }))
-          }
-          onUpdateLayer={(id, patch) =>
-            commitProject((p) => ({
-              ...p,
-              layers: p.layers.map((l) =>
-                l.id === id ? { ...l, ...patch } : l
-              ),
-            }))
-          }
-          onSetLayerProp={handleSetLayerProp}
-          onToggleKeyframe={handleToggleKeyframe}
-        />
+    <div className={mode === 'vibes' ? 'vibe-shell' : 'studio-shell'}>
+      <div className="mode-bar">
+        <div className="mode-bar-brand">Animator</div>
+        <div className="mode-switcher" role="tablist" aria-label="App mode">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === 'vibes'}
+            className={`mode-tab ${mode === 'vibes' ? 'active' : ''}`}
+            onClick={() => setMode('vibes')}
+          >
+            Vibe Gallery
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === 'studio'}
+            className={`mode-tab ${mode === 'studio' ? 'active' : ''}`}
+            onClick={() => setMode('studio')}
+          >
+            Visual Studio
+          </button>
+        </div>
       </div>
 
-      <Timeline
-        project={project}
-        selectedLayer={selectedLayer}
-        currentTime={currentTime}
-        isPlaying={isPlaying}
-        autoKeyframe={autoKeyframe}
-        onTogglePlay={() => setIsPlaying((p) => !p)}
-        onStop={() => {
-          setIsPlaying(false);
-          setCurrentTime(0);
-        }}
-        onSeek={(t) => {
-          setIsPlaying(false);
-          setCurrentTime(Math.max(0, Math.min(project.duration, t)));
-        }}
-        onToggleLoop={() =>
-          commitProject((p) => ({ ...p, loop: !p.loop }))
-        }
-        onToggleAutoKeyframe={() => setAutoKeyframe((a) => !a)}
-        onUpdateKeyframeEasing={(layerId, prop, kfId, easing) =>
-          commitProject((p) => ({
-            ...p,
-            layers: p.layers.map((l) => {
-              if (l.id !== layerId) return l;
-              return {
-                ...l,
-                keyframes: {
-                  ...l.keyframes,
-                  [prop]: (l.keyframes[prop] ?? []).map((k) =>
-                    k.id === kfId ? { ...k, easing } : k
-                  ),
-                },
-              };
-            }),
-          }))
-        }
-        onDeleteKeyframe={(layerId, prop, kfId) =>
-          commitProject((p) => ({
-            ...p,
-            layers: p.layers.map((l) => {
-              if (l.id !== layerId) return l;
-              return {
-                ...l,
-                keyframes: {
-                  ...l.keyframes,
-                  [prop]: (l.keyframes[prop] ?? []).filter(
-                    (k) => k.id !== kfId
-                  ),
-                },
-              };
-            }),
-          }))
-        }
-      />
+      {mode === 'vibes' ? (
+        <VibeGallery />
+      ) : (
+        <>
+          <TopBar
+            project={project}
+            canUndo={history.length > 0}
+            canRedo={future.length > 0}
+            onRename={(name) => commitProject((p) => ({ ...p, name }))}
+            onSelectPreset={handleSelectPreset}
+            onUndo={handleUndo}
+            onRedo={handleRedo}
+            onImportProject={(imported) => {
+              commitProject(() => imported);
+              setSelectedLayerId(imported.layers[0]?.id ?? null);
+              setCurrentTime(0);
+            }}
+            onOpenExport={() => setExportOpen(true)}
+          />
 
-      <ExportModal
-        open={exportOpen}
-        project={project}
-        currentTime={currentTime}
-        onClose={() => setExportOpen(false)}
-      />
+          <div className="workspace-grid">
+            <LayerPanel
+              layers={project.layers}
+              selectedLayerId={selectedLayerId}
+              onSelectLayer={setSelectedLayerId}
+              onAddLayer={handleAddLayer}
+              onToggleVisible={(id) =>
+                commitProject((p) => ({
+                  ...p,
+                  layers: p.layers.map((l) =>
+                    l.id === id ? { ...l, visible: !l.visible } : l
+                  ),
+                }))
+              }
+              onToggleLock={(id) =>
+                commitProject((p) => ({
+                  ...p,
+                  layers: p.layers.map((l) =>
+                    l.id === id ? { ...l, locked: !l.locked } : l
+                  ),
+                }))
+              }
+              onDuplicateLayer={(id) => {
+                const orig = project.layers.find((l) => l.id === id);
+                if (!orig) return;
+                const copy: Layer = {
+                  ...structuredClone(orig),
+                  id: uid('layer'),
+                  name: `${orig.name} Copy`,
+                };
+                copy.base.x += 24;
+                copy.base.y += 24;
+                commitProject((p) => ({ ...p, layers: [...p.layers, copy] }));
+                setSelectedLayerId(copy.id);
+              }}
+              onDeleteLayer={(id) => {
+                commitProject((p) => ({
+                  ...p,
+                  layers: p.layers.filter((l) => l.id !== id),
+                }));
+                if (selectedLayerId === id) setSelectedLayerId(null);
+              }}
+            />
+
+            <Stage
+              project={project}
+              currentTime={currentTime}
+              selectedLayerId={selectedLayerId}
+              onSelectLayer={setSelectedLayerId}
+              onMoveLayer={handleMoveLayer}
+              onAddCelStroke={handleAddCelStroke}
+              onClearCelFrame={handleClearCelFrame}
+            />
+
+            <InspectorPanel
+              project={project}
+              selectedLayer={selectedLayer}
+              currentTime={currentTime}
+              onUpdateProject={(patch) =>
+                commitProject((p) => ({ ...p, ...patch }))
+              }
+              onUpdateLayer={(id, patch) =>
+                commitProject((p) => ({
+                  ...p,
+                  layers: p.layers.map((l) =>
+                    l.id === id ? { ...l, ...patch } : l
+                  ),
+                }))
+              }
+              onSetLayerProp={handleSetLayerProp}
+              onToggleKeyframe={handleToggleKeyframe}
+            />
+          </div>
+
+          <Timeline
+            project={project}
+            selectedLayer={selectedLayer}
+            currentTime={currentTime}
+            isPlaying={isPlaying}
+            autoKeyframe={autoKeyframe}
+            onTogglePlay={() => setIsPlaying((p) => !p)}
+            onStop={() => {
+              setIsPlaying(false);
+              setCurrentTime(0);
+            }}
+            onSeek={(t) => {
+              setIsPlaying(false);
+              setCurrentTime(Math.max(0, Math.min(project.duration, t)));
+            }}
+            onToggleLoop={() =>
+              commitProject((p) => ({ ...p, loop: !p.loop }))
+            }
+            onToggleAutoKeyframe={() => setAutoKeyframe((a) => !a)}
+            onUpdateKeyframeEasing={(layerId, prop, kfId, easing) =>
+              commitProject((p) => ({
+                ...p,
+                layers: p.layers.map((l) => {
+                  if (l.id !== layerId) return l;
+                  return {
+                    ...l,
+                    keyframes: {
+                      ...l.keyframes,
+                      [prop]: (l.keyframes[prop] ?? []).map((k) =>
+                        k.id === kfId ? { ...k, easing } : k
+                      ),
+                    },
+                  };
+                }),
+              }))
+            }
+            onDeleteKeyframe={(layerId, prop, kfId) =>
+              commitProject((p) => ({
+                ...p,
+                layers: p.layers.map((l) => {
+                  if (l.id !== layerId) return l;
+                  return {
+                    ...l,
+                    keyframes: {
+                      ...l.keyframes,
+                      [prop]: (l.keyframes[prop] ?? []).filter(
+                        (k) => k.id !== kfId
+                      ),
+                    },
+                  };
+                }),
+              }))
+            }
+          />
+
+          <ExportModal
+            open={exportOpen}
+            project={project}
+            currentTime={currentTime}
+            onClose={() => setExportOpen(false)}
+          />
+        </>
+      )}
     </div>
   );
 };
